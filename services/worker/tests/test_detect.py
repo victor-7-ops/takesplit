@@ -139,3 +139,80 @@ def test_confidence_tier_medium():
 def test_confidence_tier_low():
     assert detect.confidence_tier(0.0) == "low"
     assert detect.confidence_tier(0.39) == "low"
+
+
+def test_detect_segments_quiet_intro_does_not_split():
+    audio = fixtures.concat(
+        fixtures.noise(5.0, amplitude=0.01),
+        fixtures.tone(8.0, amplitude=0.06),
+        fixtures.tone(50.0, amplitude=0.4),
+        fixtures.noise(5.0, amplitude=0.01),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    assert len(segments) == 1
+    assert segments[0]["kind"] == "take"
+
+
+def test_detect_segments_talk_near_quiet_playing_stays_separate():
+    audio = fixtures.concat(
+        fixtures.tone(50.0, amplitude=0.4),
+        fixtures.noise(6.0, amplitude=0.01),
+        fixtures.tone(8.0, amplitude=0.25),
+        fixtures.noise(6.0, amplitude=0.01),
+        fixtures.tone(50.0, amplitude=0.4),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    assert len(segments) == 3
+    assert [s["kind"] for s in segments] == ["take", "talk", "take"]
+
+
+def test_detect_segments_restart_from_top_stays_separate():
+    audio = fixtures.concat(
+        fixtures.tone(5.0, amplitude=0.4),
+        fixtures.noise(10.0, amplitude=0.01),
+        fixtures.tone(60.0, amplitude=0.4),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    assert len(segments) == 2
+
+
+def test_detect_segments_continuous_noodling_merges_into_one():
+    audio = fixtures.concat(
+        fixtures.noise(5.0, amplitude=0.01),
+        fixtures.tone(45.0, amplitude=0.4),
+        fixtures.tone(3.0, amplitude=0.06),
+        fixtures.tone(45.0, amplitude=0.4),
+        fixtures.noise(5.0, amplitude=0.01),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    assert len(segments) == 1
+    assert segments[0]["kind"] == "take"
+
+
+def test_detect_segments_clipped_loud_room_still_detects():
+    import numpy as np
+
+    clipped = np.clip(fixtures.tone(60.0, amplitude=1.5), -1.0, 1.0)
+    audio = fixtures.concat(
+        fixtures.noise(5.0, amplitude=0.01),
+        clipped,
+        fixtures.noise(5.0, amplitude=0.01),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    assert len(segments) == 1
+    assert segments[0]["kind"] == "take"
+    assert 0.0 <= segments[0]["confidence"] <= 1.0
+
+
+def test_detect_segments_every_segment_has_confidence_fields():
+    audio = fixtures.concat(
+        fixtures.noise(5.0, amplitude=0.01),
+        fixtures.tone(50.0, amplitude=0.4),
+        fixtures.noise(5.0, amplitude=0.01),
+    )
+    segments = detect.detect_segments(audio, fixtures.SAMPLE_RATE)
+    for seg in segments:
+        assert "confidence" in seg
+        assert "confidence_tier" in seg
+        assert 0.0 <= seg["confidence"] <= 1.0
+        assert seg["confidence_tier"] in ("high", "medium", "low")

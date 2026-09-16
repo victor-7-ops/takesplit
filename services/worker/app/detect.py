@@ -119,3 +119,48 @@ def confidence_tier(score: float) -> str:
     if score >= 0.4:
         return "medium"
     return "low"
+
+
+def detect_segments(samples: np.ndarray, sample_rate: int, params: dict | None = None) -> list[dict]:
+    p = {**DEFAULT_PARAMS, **(params or {})}
+    weights = {**DEFAULT_PARAMS["confidence_weights"], **p.get("confidence_weights", {})}
+
+    frame_db = frame_rms_db(samples, sample_rate, p["frame_ms"])
+    smoothed = smooth_median(frame_db, p["frame_ms"], p["smooth_sec"])
+    noise_floor_db, music_level_db, threshold_db = compute_threshold(smoothed, p["threshold_ratio"])
+    raw_regions = find_active_regions(smoothed, threshold_db, p["frame_ms"])
+    merged = merge_regions(raw_regions, p["min_gap_sec"])
+
+    total_duration_sec = len(samples) / sample_rate
+    segments = []
+    for start, end, gap_used in merged:
+        duration = end - start
+        kind = "talk" if duration < p["min_take_sec"] else "take"
+
+        threshold_margin = boundary_threshold_margin(
+            smoothed, start, end, p["frame_ms"], threshold_db, noise_floor_db, music_level_db
+        )
+        gap_margin = gap_confidence_margin(gap_used, p["min_gap_sec"])
+        duration_margin = duration_confidence_margin(duration, p["min_take_sec"])
+        confidence = composite_confidence(threshold_margin, gap_margin, duration_margin, weights)
+
+        padded_start = max(0.0, start - p["pad_sec"])
+        padded_end = min(total_duration_sec, end + p["pad_sec"])
+
+        segments.append(
+            {
+                "start_sec": round(padded_start, 3),
+                "end_sec": round(padded_end, 3),
+                "kind": kind,
+                "confidence": round(confidence, 3),
+                "confidence_tier": confidence_tier(confidence),
+            }
+        )
+
+    for i in range(len(segments) - 1):
+        if segments[i]["end_sec"] > segments[i + 1]["start_sec"]:
+            midpoint = round((segments[i]["end_sec"] + segments[i + 1]["start_sec"]) / 2, 3)
+            segments[i]["end_sec"] = midpoint
+            segments[i + 1]["start_sec"] = midpoint
+
+    return segments
