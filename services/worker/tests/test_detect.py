@@ -62,3 +62,80 @@ def test_merge_regions_keeps_far_regions_separate():
 
 def test_merge_regions_empty_input():
     assert detect.merge_regions([], min_gap_sec=4.0) == []
+
+
+def test_boundary_threshold_margin_at_threshold_is_zero():
+    frame_db = np.array([-40.0, -40.0, -10.0, -10.0])
+    margin = detect.boundary_threshold_margin(
+        frame_db, start_sec=0.2, end_sec=0.3, frame_ms=100,
+        threshold_db=-10.0, noise_floor_db=-40.0, music_level_db=-10.0,
+    )
+    assert margin == 0.0
+
+
+def test_boundary_threshold_margin_far_from_threshold_is_one():
+    frame_db = np.array([-40.0, -40.0, -5.0, -5.0])
+    margin = detect.boundary_threshold_margin(
+        frame_db, start_sec=0.2, end_sec=0.4, frame_ms=100,
+        threshold_db=-40.0, noise_floor_db=-40.0, music_level_db=-5.0,
+    )
+    assert margin == 1.0
+
+
+def test_gap_confidence_margin_no_gap_is_confident():
+    assert detect.gap_confidence_margin(None, min_gap_sec=4.0) == 1.0
+
+
+def test_gap_confidence_margin_at_cutoff_is_confident():
+    assert detect.gap_confidence_margin(4.0, min_gap_sec=4.0) == 1.0
+
+
+def test_gap_confidence_margin_zero_gap_is_unconfident():
+    assert detect.gap_confidence_margin(0.0, min_gap_sec=4.0) == 0.0
+
+
+def test_gap_confidence_margin_halfway():
+    assert detect.gap_confidence_margin(2.0, min_gap_sec=4.0) == 0.5
+
+
+def test_duration_confidence_margin_at_minimum_is_confident():
+    assert detect.duration_confidence_margin(40.0, min_take_sec=40.0) == 1.0
+
+
+def test_duration_confidence_margin_capped_above_minimum():
+    assert detect.duration_confidence_margin(80.0, min_take_sec=40.0) == 1.0
+
+
+def test_duration_confidence_margin_halfway():
+    assert detect.duration_confidence_margin(20.0, min_take_sec=40.0) == 0.5
+
+
+def test_composite_confidence_all_confident_is_one():
+    weights = {"threshold": 0.4, "gap": 0.3, "duration": 0.3}
+    assert detect.composite_confidence(1.0, 1.0, 1.0, weights) == 1.0
+
+
+def test_composite_confidence_all_unconfident_is_zero():
+    weights = {"threshold": 0.4, "gap": 0.3, "duration": 0.3}
+    assert detect.composite_confidence(0.0, 0.0, 0.0, weights) == 0.0
+
+
+def test_composite_confidence_weighted_average():
+    weights = {"threshold": 0.4, "gap": 0.3, "duration": 0.3}
+    score = detect.composite_confidence(1.0, 0.0, 0.0, weights)
+    assert score == 0.4
+
+
+def test_confidence_tier_high():
+    assert detect.confidence_tier(0.7) == "high"
+    assert detect.confidence_tier(1.0) == "high"
+
+
+def test_confidence_tier_medium():
+    assert detect.confidence_tier(0.4) == "medium"
+    assert detect.confidence_tier(0.69) == "medium"
+
+
+def test_confidence_tier_low():
+    assert detect.confidence_tier(0.0) == "low"
+    assert detect.confidence_tier(0.39) == "low"

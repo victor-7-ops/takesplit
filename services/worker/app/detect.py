@@ -71,3 +71,51 @@ def merge_regions(regions: list[tuple[float, float]], min_gap_sec: float) -> lis
         else:
             merged.append([start, end, None])
     return [tuple(m) for m in merged]
+
+
+def boundary_threshold_margin(
+    frame_db: np.ndarray,
+    start_sec: float,
+    end_sec: float,
+    frame_ms: int,
+    threshold_db: float,
+    noise_floor_db: float,
+    music_level_db: float,
+) -> float:
+    frame_sec = frame_ms / 1000
+    span = max(music_level_db - noise_floor_db, 1e-6)
+    last_idx = len(frame_db) - 1
+    idxs = [
+        min(max(int(round(start_sec / frame_sec)), 0), last_idx),
+        min(max(int(round(end_sec / frame_sec)) - 1, 0), last_idx),
+    ]
+    margins = [min(1.0, abs(float(frame_db[i]) - threshold_db) / span) for i in idxs]
+    return float(min(margins))
+
+
+def gap_confidence_margin(gap_used_sec: float | None, min_gap_sec: float) -> float:
+    if gap_used_sec is None:
+        return 1.0
+    return float(min(1.0, gap_used_sec / min_gap_sec))
+
+
+def duration_confidence_margin(duration_sec: float, min_take_sec: float) -> float:
+    return float(min(1.0, duration_sec / min_take_sec))
+
+
+def composite_confidence(
+    threshold_margin: float, gap_margin: float, duration_margin: float, weights: dict
+) -> float:
+    return float(
+        weights["threshold"] * threshold_margin
+        + weights["gap"] * gap_margin
+        + weights["duration"] * duration_margin
+    )
+
+
+def confidence_tier(score: float) -> str:
+    if score >= 0.7:
+        return "high"
+    if score >= 0.4:
+        return "medium"
+    return "low"
