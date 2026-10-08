@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 import tempfile
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from supabase import create_client
@@ -8,6 +11,16 @@ from supabase import create_client
 from app import audio, detect, peaks
 
 BUCKET = "rehearsals"
+logger = logging.getLogger("takesplit.jobs")
+
+
+@contextmanager
+def _timed(step: str):
+    start = time.time()
+    try:
+        yield
+    finally:
+        logger.info("%s took %.2fs", step, time.time() - start)
 
 
 def _client():
@@ -34,37 +47,43 @@ def run_process(rehearsal_id: str) -> None:
         params = rehearsal.get("detection_params") or {}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            samples, sample_rate = _download_and_load(client, storage_path, tmp_dir)
+            with _timed("download+normalize"):
+                samples, sample_rate = _download_and_load(client, storage_path, tmp_dir)
 
-            segments = detect.detect_segments(samples, sample_rate, params)
-            peak_pairs = peaks.compute_peaks(samples)
+            with _timed("detect"):
+                segments = detect.detect_segments(samples, sample_rate, params)
+
+            with _timed("peaks"):
+                peak_pairs = peaks.compute_peaks(samples)
 
             peaks_path = f"{str(Path(storage_path).parent)}/peaks.json".replace("\\", "/")
-            client.storage.from_(BUCKET).upload(
-                peaks_path,
-                json.dumps(peak_pairs).encode(),
-                {"content-type": "application/json", "upsert": "true"},
-            )
-
-        client.table("clips").delete().eq("rehearsal_id", rehearsal_id).eq("auto_detected", True).execute()
-
-        clip_confidence = {}
-        for seg in segments:
-            inserted = (
-                client.table("clips")
-                .insert(
-                    {
-                        "rehearsal_id": rehearsal_id,
-                        "start_sec": seg["start_sec"],
-                        "end_sec": seg["end_sec"],
-                        "kind": seg["kind"],
-                        "auto_detected": True,
-                    }
+            with _timed("upload peaks"):
+                client.storage.from_(BUCKET).upload(
+                    peaks_path,
+                    json.dumps(peak_pairs).encode(),
+                    {"content-type": "application/json", "upsert": "true"},
                 )
-                .execute()
-                .data[0]
-            )
-            clip_confidence[str(inserted["id"])] = {"score": seg["confidence"], "tier": seg["confidence_tier"]}
+
+        with _timed("write clips"):
+            client.table("clips").delete().eq("rehearsal_id", rehearsal_id).eq("auto_detected", True).execute()
+
+            clip_confidence = {}
+            for seg in segments:
+                inserted = (
+                    client.table("clips")
+                    .insert(
+                        {
+                            "rehearsal_id": rehearsal_id,
+                            "start_sec": seg["start_sec"],
+                            "end_sec": seg["end_sec"],
+                            "kind": seg["kind"],
+                            "auto_detected": True,
+                        }
+                    )
+                    .execute()
+                    .data[0]
+                )
+                clip_confidence[str(inserted["id"])] = {"score": seg["confidence"], "tier": seg["confidence_tier"]}
 
         merged_params = {**detect.DEFAULT_PARAMS, **params, "clip_confidence": clip_confidence}
         client.table("rehearsals").update(
@@ -77,9 +96,12 @@ def run_process(rehearsal_id: str) -> None:
         ).eq("id", rehearsal_id).execute()
 
     except Exception as e:
-        client.table("rehearsals").update(
-            {"status": "failed", "error_message": str(e)}
-        ).eq("id", rehearsal_id).execute()
+        try:
+            client.table("rehearsals").update(
+                {"status": "failed", "error_message": str(e)}
+            ).eq("id", rehearsal_id).execute()
+        except Exception:
+            logger.exception("failed to record failure status for rehearsal %s", rehearsal_id)
         raise
 
 
