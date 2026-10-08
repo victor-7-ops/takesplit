@@ -31,6 +31,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!session) {
       setBandId(null);
       setBandLoading(false);
@@ -44,9 +46,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .eq("user_id", session.user.id)
       .limit(1)
       .then(({ data }) => {
+        if (cancelled) return;
         setBandId(data && data.length > 0 ? (data[0].band_id as string) : null);
         setBandLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   return (
