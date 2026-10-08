@@ -9,7 +9,10 @@ export default function SignIn() {
 
   async function handleSignIn() {
     setError(null);
-    const { error: signInError } = await supabase.auth.signInWithOtp({ email });
+    const { error: signInError } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
+    });
     if (signInError) {
       setError(signInError.message);
       return;
