@@ -43,28 +43,12 @@ export default function BandSetup() {
 
   async function handleJoin() {
     setError(null);
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (!userId) {
-      setError("Not signed in.");
-      return;
-    }
-
-    const { data: band, error: bandError } = await supabase
-      .from("bands")
-      .select("id")
-      .eq("invite_code", inviteCode)
-      .single();
-    if (bandError || !band) {
-      setError("Invite code not found.");
-      return;
-    }
-
-    const { error: memberError } = await supabase
-      .from("band_members")
-      .insert({ band_id: band.id, user_id: userId, display_name: displayName, role: "member" });
-    if (memberError) {
-      setError(memberError.message);
+    const { error: joinError } = await supabase.rpc("join_band", {
+      p_invite_code: inviteCode,
+      p_display_name: displayName,
+    });
+    if (joinError) {
+      setError(joinError.message);
       return;
     }
 
