@@ -73,6 +73,7 @@ export default function RehearsalDetail() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Clips</Text>
+      <Button title="Edit waveform" onPress={() => router.push(`/rehearsal/${id}/waveform`)} />
       {clips.map((clip) => (
         <ClipRow key={clip.id} clip={clip} audioUrl={signedUrl} />
       ))}
