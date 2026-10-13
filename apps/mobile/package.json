@@ -25,6 +25,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "test": "node --experimental-strip-types --test lib/*.test.ts",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
