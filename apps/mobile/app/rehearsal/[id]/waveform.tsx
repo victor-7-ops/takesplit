@@ -215,17 +215,32 @@ function ClipOverlay({
     setDraftEnd(clip.end_sec);
   }, [clip.start_sec, clip.end_sec]);
 
+  // PanResponder is created once (useRef) but drags can happen after draftStart/draftEnd
+  // have since changed via a prior commit. Reading through a ref kept current every render
+  // (rather than closing over draftStart/draftEnd directly) avoids the responder's callbacks
+  // operating on stale values from whichever render first created it.
+  const liveDraft = useRef({ draftStart, draftEnd });
+  useEffect(() => {
+    liveDraft.current = { draftStart, draftEnd };
+  });
+
+  const startDragBaseX = useRef(0);
+  const endDragBaseX = useRef(0);
+
   const startPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startDragBaseX.current = secToX(liveDraft.current.draftStart);
+      },
       onPanResponderMove: (_evt, gesture) => {
-        const newStartSec = xToSec(secToX(clip.start_sec) + gesture.dx);
-        if (newStartSec < draftEnd) {
+        const newStartSec = xToSec(startDragBaseX.current + gesture.dx);
+        if (newStartSec < liveDraft.current.draftEnd) {
           setDraftStart(newStartSec);
         }
       },
       onPanResponderRelease: () => {
-        onBoundsChange(draftStart, draftEnd);
+        onBoundsChange(liveDraft.current.draftStart, liveDraft.current.draftEnd);
       },
     })
   ).current;
@@ -233,14 +248,17 @@ function ClipOverlay({
   const endPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        endDragBaseX.current = secToX(liveDraft.current.draftEnd);
+      },
       onPanResponderMove: (_evt, gesture) => {
-        const newEndSec = xToSec(secToX(clip.end_sec) + gesture.dx);
-        if (newEndSec > draftStart) {
+        const newEndSec = xToSec(endDragBaseX.current + gesture.dx);
+        if (newEndSec > liveDraft.current.draftStart) {
           setDraftEnd(newEndSec);
         }
       },
       onPanResponderRelease: () => {
-        onBoundsChange(draftStart, draftEnd);
+        onBoundsChange(liveDraft.current.draftStart, liveDraft.current.draftEnd);
       },
     })
   ).current;
