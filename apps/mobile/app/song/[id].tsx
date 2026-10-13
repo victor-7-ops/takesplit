@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { formatDuration } from "../../lib/format";
@@ -62,7 +62,7 @@ export default function SongView() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>{title}</Text>
       {takes.map((take) => (
         <View key={take.id} style={styles.row}>
@@ -74,12 +74,13 @@ export default function SongView() {
           <Text>{take.rating ? "*".repeat(take.rating) : "unrated"}</Text>
         </View>
       ))}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
+  container: { flex: 1 },
+  content: { padding: 16, gap: 12 },
   heading: { fontSize: 20, fontWeight: "600" },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee" },
 });

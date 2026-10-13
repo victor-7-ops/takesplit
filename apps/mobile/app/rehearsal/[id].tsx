@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { supabase } from "../../lib/supabase";
@@ -71,12 +71,12 @@ export default function RehearsalDetail() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Clips</Text>
       {clips.map((clip) => (
         <ClipRow key={clip.id} clip={clip} audioUrl={signedUrl} />
       ))}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -118,7 +118,8 @@ function ClipRow({ clip, audioUrl }: { clip: Clip; audioUrl: string | null }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
+  container: { flex: 1 },
+  content: { padding: 16, gap: 12 },
   heading: { fontSize: 20, fontWeight: "600" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 },
   rowInfo: { gap: 2 },

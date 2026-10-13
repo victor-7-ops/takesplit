@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { assignSongToClip } from "../../lib/clips";
@@ -125,7 +125,7 @@ export default function ClipTagSheet() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Song</Text>
       <View style={styles.chipRow}>
         {songs.map((song) => (
@@ -179,12 +179,13 @@ export default function ClipTagSheet() {
 
       {saving ? <ActivityIndicator /> : <Button title="Save" onPress={handleSave} />}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 8 },
+  container: { flex: 1 },
+  content: { padding: 16, gap: 8 },
   heading: { fontSize: 16, fontWeight: "600", marginTop: 12 },
   row: { flexDirection: "row", gap: 8, alignItems: "center" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
