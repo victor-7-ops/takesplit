@@ -4,6 +4,7 @@ import {
   Button,
   Dimensions,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -267,7 +268,7 @@ function ClipOverlay({
   const width = secToX(draftEnd) - left;
 
   return (
-    <View
+    <Pressable
       style={[
         styles.overlay,
         {
@@ -277,7 +278,7 @@ function ClipOverlay({
           borderColor: selected ? "#2563eb" : "transparent",
         },
       ]}
-      onTouchEnd={onSelect}
+      onPress={onSelect}
     >
       {selected ? (
         <>
@@ -291,7 +292,7 @@ function ClipOverlay({
           />
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
