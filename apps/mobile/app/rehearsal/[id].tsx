@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { supabase } from "../../lib/supabase";
 import { formatDuration } from "../../lib/format";
@@ -10,6 +10,8 @@ type Clip = {
   start_sec: number;
   end_sec: number;
   kind: string;
+  rating: number | null;
+  song_title: string | null;
 };
 
 export default function RehearsalDetail() {
@@ -39,10 +41,23 @@ export default function RehearsalDetail() {
 
       const { data: clipRows } = await supabase
         .from("clips")
-        .select("id, start_sec, end_sec, kind")
+        .select("id, start_sec, end_sec, kind, rating, songs(title)")
         .eq("rehearsal_id", id)
         .order("start_sec", { ascending: true });
-      setClips(clipRows ?? []);
+
+      const normalized: Clip[] = (clipRows ?? []).map((row) => {
+        const song = Array.isArray(row.songs) ? row.songs[0] : row.songs;
+        return {
+          id: row.id,
+          start_sec: row.start_sec,
+          end_sec: row.end_sec,
+          kind: row.kind,
+          rating: row.rating,
+          song_title: song?.title ?? null,
+        };
+      });
+
+      setClips(normalized);
       setLoading(false);
     })();
   }, [id]);
@@ -85,10 +100,19 @@ function ClipRow({ clip, audioUrl }: { clip: Clip; audioUrl: string | null }) {
 
   return (
     <View style={styles.row}>
-      <Text>
-        {formatDuration(clip.start_sec)} - {formatDuration(clip.end_sec)} ({clip.kind})
-      </Text>
-      <Button title="Play" onPress={handlePlay} disabled={!audioUrl} />
+      <View style={styles.rowInfo}>
+        <Text>
+          {formatDuration(clip.start_sec)} - {formatDuration(clip.end_sec)} ({clip.kind})
+        </Text>
+        <Text style={styles.meta}>
+          {clip.song_title ?? "No song"}
+          {clip.rating ? ` - ${"*".repeat(clip.rating)}` : ""}
+        </Text>
+      </View>
+      <View style={styles.rowActions}>
+        <Button title="Play" onPress={handlePlay} disabled={!audioUrl} />
+        <Button title="Tag" onPress={() => router.push(`/clip/${clip.id}`)} />
+      </View>
     </View>
   );
 }
@@ -97,4 +121,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, gap: 12 },
   heading: { fontSize: 20, fontWeight: "600" },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 },
+  rowInfo: { gap: 2 },
+  meta: { color: "#666", fontSize: 12 },
+  rowActions: { flexDirection: "row", gap: 8 },
 });
