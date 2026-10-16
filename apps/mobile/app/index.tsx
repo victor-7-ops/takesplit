@@ -17,6 +17,7 @@ export default function Index() {
   const { session, bandId, loading } = useSession();
   const [rehearsals, setRehearsals] = useState<Rehearsal[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
 
   const fetchRehearsals = useCallback(async () => {
     if (!bandId) {
@@ -52,6 +53,20 @@ export default function Index() {
     };
   }, [bandId, fetchRehearsals]);
 
+  useEffect(() => {
+    if (!bandId) {
+      return;
+    }
+    supabase
+      .from("bands")
+      .select("invite_code")
+      .eq("id", bandId)
+      .single()
+      .then(({ data }) => {
+        setInviteCode(data?.invite_code ?? null);
+      });
+  }, [bandId]);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -76,6 +91,7 @@ export default function Index() {
           Upload
         </Link>
       </View>
+      {inviteCode ? <Text style={styles.inviteCode}>Invite code: {inviteCode}</Text> : null}
       {listLoading ? (
         <ActivityIndicator />
       ) : (
@@ -101,5 +117,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   heading: { fontSize: 20, fontWeight: "600" },
   link: { color: "#2563eb" },
+  inviteCode: { color: "#666", fontSize: 12 },
   row: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#eee", gap: 2 },
 });
