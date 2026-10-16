@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
-import { generateInviteCode } from "../lib/invite-code";
 
 export default function BandSetup() {
   const [mode, setMode] = useState<"create" | "join">("create");
@@ -13,28 +12,12 @@ export default function BandSetup() {
 
   async function handleCreate() {
     setError(null);
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (!userId) {
-      setError("Not signed in.");
-      return;
-    }
-
-    const { data: band, error: bandError } = await supabase
-      .from("bands")
-      .insert({ name: bandName, invite_code: generateInviteCode(), created_by: userId })
-      .select()
-      .single();
-    if (bandError || !band) {
-      setError(bandError?.message ?? "Could not create band.");
-      return;
-    }
-
-    const { error: memberError } = await supabase
-      .from("band_members")
-      .insert({ band_id: band.id, user_id: userId, display_name: displayName, role: "owner" });
-    if (memberError) {
-      setError(memberError.message);
+    const { data: newBandId, error: createError } = await supabase.rpc("create_band", {
+      p_name: bandName,
+      p_display_name: displayName,
+    });
+    if (createError || !newBandId) {
+      setError(createError?.message ?? "Could not create band.");
       return;
     }
 
