@@ -6,9 +6,15 @@ type SessionState = {
   session: Session | null;
   bandId: string | null;
   loading: boolean;
+  refreshBandId: () => Promise<void>;
 };
 
-const SessionContext = createContext<SessionState>({ session: null, bandId: null, loading: true });
+const SessionContext = createContext<SessionState>({
+  session: null,
+  bandId: null,
+  loading: true,
+  refreshBandId: async () => {},
+});
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -30,6 +36,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  async function fetchBandId(userId: string) {
+    const { data } = await supabase
+      .from("band_members")
+      .select("band_id")
+      .eq("user_id", userId)
+      .limit(1);
+    return data && data.length > 0 ? (data[0].band_id as string) : null;
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -40,24 +55,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
 
     setBandLoading(true);
-    supabase
-      .from("band_members")
-      .select("band_id")
-      .eq("user_id", session.user.id)
-      .limit(1)
-      .then(({ data }) => {
-        if (cancelled) return;
-        setBandId(data && data.length > 0 ? (data[0].band_id as string) : null);
-        setBandLoading(false);
-      });
+    fetchBandId(session.user.id).then((id) => {
+      if (cancelled) return;
+      setBandId(id);
+      setBandLoading(false);
+    });
 
     return () => {
       cancelled = true;
     };
   }, [session]);
 
+  async function refreshBandId() {
+    if (!session) return;
+    const id = await fetchBandId(session.user.id);
+    setBandId(id);
+  }
+
   return (
-    <SessionContext.Provider value={{ session, bandId, loading: authLoading || bandLoading }}>
+    <SessionContext.Provider value={{ session, bandId, loading: authLoading || bandLoading, refreshBandId }}>
       {children}
     </SessionContext.Provider>
   );

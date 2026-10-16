@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { useSession } from "../lib/session-context";
 
 export default function BandSetup() {
+  const { refreshBandId } = useSession();
   const [mode, setMode] = useState<"create" | "join">("create");
   const [bandName, setBandName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -21,6 +23,7 @@ export default function BandSetup() {
       return;
     }
 
+    await refreshBandId();
     router.replace("/");
   }
 
@@ -35,6 +38,7 @@ export default function BandSetup() {
       return;
     }
 
+    await refreshBandId();
     router.replace("/");
   }
 
