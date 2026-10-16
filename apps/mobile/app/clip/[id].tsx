@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { supabase } from "../../lib/supabase";
 import { assignSongToClip } from "../../lib/clips";
 import { QUICK_TAGS } from "../../lib/tags";
 
 type Song = { id: string; title: string };
+type Comment = {
+  id: string;
+  body: string;
+  at_sec: number | null;
+  created_at: string;
+};
 
 export default function ClipTagSheet() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,6 +28,14 @@ export default function ClipTagSheet() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newCommentBody, setNewCommentBody] = useState("");
+  const [captureAtPlayhead, setCaptureAtPlayhead] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+
+  const player = useAudioPlayer(audioUrl ?? undefined);
+  const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
     if (!id) {
@@ -48,7 +63,7 @@ export default function ClipTagSheet() {
 
       const { data: rehearsal } = await supabase
         .from("rehearsals")
-        .select("band_id")
+        .select("band_id, storage_path")
         .eq("id", clip.rehearsal_id)
         .single();
 
@@ -60,7 +75,19 @@ export default function ClipTagSheet() {
           .eq("band_id", rehearsal.band_id)
           .order("title", { ascending: true });
         setSongs(songRows ?? []);
+
+        const { data: signed } = await supabase.storage
+          .from("rehearsals")
+          .createSignedUrl(rehearsal.storage_path, 3600);
+        setAudioUrl(signed?.signedUrl ?? null);
       }
+
+      const { data: commentRows } = await supabase
+        .from("comments")
+        .select("id, body, at_sec, created_at")
+        .eq("clip_id", id)
+        .order("created_at", { ascending: true });
+      setComments(commentRows ?? []);
 
       setLoading(false);
     })();
@@ -114,6 +141,51 @@ export default function ClipTagSheet() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function loadComments() {
+    const { data } = await supabase
+      .from("comments")
+      .select("id, body, at_sec, created_at")
+      .eq("clip_id", id)
+      .order("created_at", { ascending: true });
+    setComments(data ?? []);
+  }
+
+  async function handlePostComment() {
+    if (!newCommentBody.trim() || !id) {
+      return;
+    }
+    setCommentError(null);
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) {
+      setCommentError("Not signed in.");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("comments").insert({
+      clip_id: id,
+      user_id: userId,
+      body: newCommentBody.trim(),
+      at_sec: captureAtPlayhead ? status.currentTime : null,
+    });
+    if (insertError) {
+      setCommentError(insertError.message);
+      return;
+    }
+
+    setNewCommentBody("");
+    setCaptureAtPlayhead(false);
+    await loadComments();
+  }
+
+  async function handleSeekToComment(atSec: number) {
+    if (!audioUrl) {
+      return;
+    }
+    await player.seekTo(atSec);
+    player.play();
   }
 
   if (loading) {
@@ -177,6 +249,41 @@ export default function ClipTagSheet() {
       <Text style={styles.heading}>Notes</Text>
       <TextInput style={styles.notes} multiline value={notes} onChangeText={setNotes} />
 
+      <Text style={styles.heading}>Comments</Text>
+      <Button
+        title={status.playing ? "Pause" : "Play"}
+        onPress={() => (status.playing ? player.pause() : player.play())}
+        disabled={!audioUrl}
+      />
+      <Text style={styles.meta}>Playhead: {status.currentTime.toFixed(2)}s</Text>
+
+      {comments.map((comment) => (
+        <Pressable
+          key={comment.id}
+          style={styles.commentRow}
+          onPress={() => (comment.at_sec !== null ? handleSeekToComment(comment.at_sec) : undefined)}
+        >
+          <Text>{comment.body}</Text>
+          {comment.at_sec !== null ? (
+            <Text style={styles.meta}>at {comment.at_sec.toFixed(2)}s</Text>
+          ) : null}
+        </Pressable>
+      ))}
+
+      <TextInput
+        style={styles.notes}
+        placeholder="Add a comment"
+        value={newCommentBody}
+        onChangeText={setNewCommentBody}
+      />
+      <Pressable style={styles.row} onPress={() => setCaptureAtPlayhead((current) => !current)}>
+        <View style={[styles.chip, captureAtPlayhead && styles.chipSelected]}>
+          <Text>{captureAtPlayhead ? "Will tag current time" : "Tag current time"}</Text>
+        </View>
+      </Pressable>
+      <Button title="Post comment" onPress={handlePostComment} />
+      {commentError ? <Text style={styles.error}>{commentError}</Text> : null}
+
       {saving ? <ActivityIndicator /> : <Button title="Save" onPress={handleSave} />}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </ScrollView>
@@ -194,4 +301,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
   notes: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, minHeight: 80 },
   error: { color: "red" },
+  commentRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee", gap: 2 },
+  meta: { color: "#666", fontSize: 12 },
 });
