@@ -17,17 +17,24 @@ export default function Index() {
   const { session, bandId, loading } = useSession();
   const [rehearsals, setRehearsals] = useState<Rehearsal[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
 
   const fetchRehearsals = useCallback(async () => {
     if (!bandId) {
       return;
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("rehearsals")
       .select("id, title, recorded_on, duration_sec, status")
       .eq("band_id", bandId)
       .order("created_at", { ascending: false });
+    if (error) {
+      setListError(error.message);
+      setListLoading(false);
+      return;
+    }
+    setListError(null);
     setRehearsals(data ?? []);
     setListLoading(false);
   }, [bandId]);
@@ -94,6 +101,8 @@ export default function Index() {
       {inviteCode ? <Text style={styles.inviteCode}>Invite code: {inviteCode}</Text> : null}
       {listLoading ? (
         <ActivityIndicator />
+      ) : listError ? (
+        <Text style={styles.error}>{listError}</Text>
       ) : (
         <FlatList
           data={rehearsals}
@@ -106,6 +115,9 @@ export default function Index() {
               <Text>{item.status}</Text>
             </Pressable>
           )}
+          ListEmptyComponent={
+            <Text style={styles.empty}>No rehearsals yet. Tap Upload to add your first recording.</Text>
+          }
         />
       )}
     </View>
@@ -119,4 +131,6 @@ const styles = StyleSheet.create({
   link: { color: "#2563eb" },
   inviteCode: { color: "#666", fontSize: 12 },
   row: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#eee", gap: 2 },
+  empty: { color: "#666", textAlign: "center", marginTop: 32 },
+  error: { color: "red" },
 });

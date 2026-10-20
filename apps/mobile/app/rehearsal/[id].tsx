@@ -18,6 +18,8 @@ export default function RehearsalDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [clips, setClips] = useState<Clip[]>([]);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,9 +30,14 @@ export default function RehearsalDetail() {
     (async () => {
       const { data: rehearsal } = await supabase
         .from("rehearsals")
-        .select("storage_path")
+        .select("storage_path, status, error_message")
         .eq("id", id)
         .single();
+
+      if (rehearsal) {
+        setStatus(rehearsal.status);
+        setErrorMessage(rehearsal.error_message);
+      }
 
       if (rehearsal) {
         const { data: signed } = await supabase.storage
@@ -70,13 +77,32 @@ export default function RehearsalDetail() {
     );
   }
 
+  if (status === "failed") {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.error}>Processing failed: {errorMessage ?? "Unknown error."}</Text>
+      </View>
+    );
+  }
+
+  if (status === "uploaded" || status === "processing") {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator />
+        <Text style={styles.meta}>Still processing this rehearsal. Check back shortly.</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Clips</Text>
       <Button title="Edit waveform" onPress={() => router.push(`/rehearsal/${id}/waveform`)} />
-      {clips.map((clip) => (
-        <ClipRow key={clip.id} clip={clip} audioUrl={signedUrl} />
-      ))}
+      {clips.length === 0 ? (
+        <Text style={styles.meta}>No clips found for this rehearsal.</Text>
+      ) : (
+        clips.map((clip) => <ClipRow key={clip.id} clip={clip} audioUrl={signedUrl} />)
+      )}
     </ScrollView>
   );
 }
@@ -126,4 +152,5 @@ const styles = StyleSheet.create({
   rowInfo: { gap: 2 },
   meta: { color: "#666", fontSize: 12 },
   rowActions: { flexDirection: "row", gap: 8 },
+  error: { color: "red" },
 });

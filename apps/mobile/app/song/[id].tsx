@@ -64,6 +64,7 @@ export default function SongView() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>{title}</Text>
+      {takes.length === 0 ? <Text style={styles.meta}>No takes tagged with this song yet.</Text> : null}
       {takes.map((take) => (
         <View key={take.id} style={styles.row}>
           <Text>{take.recorded_on}</Text>
@@ -83,4 +84,5 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   heading: { fontSize: 20, fontWeight: "600" },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  meta: { color: "#666" },
 });
