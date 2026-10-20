@@ -125,9 +125,19 @@ def detect_segments(samples: np.ndarray, sample_rate: int, params: dict | None =
     p = {**DEFAULT_PARAMS, **(params or {})}
     weights = {**DEFAULT_PARAMS["confidence_weights"], **p.get("confidence_weights", {})}
 
+    frame_len = int(sample_rate * p["frame_ms"] / 1000)
+    if len(samples) < frame_len:
+        return []
+
     frame_db = frame_rms_db(samples, sample_rate, p["frame_ms"])
     smoothed = smooth_median(frame_db, p["frame_ms"], p["smooth_sec"])
     noise_floor_db, music_level_db, threshold_db = compute_threshold(smoothed, p["threshold_ratio"])
+
+    if music_level_db - noise_floor_db < 1e-6:
+        # No dynamic range at all (e.g. a silent or failed recording) - every frame reads as
+        # equally "active", which would otherwise produce one bogus take spanning the file.
+        return []
+
     raw_regions = find_active_regions(smoothed, threshold_db, p["frame_ms"])
     merged = merge_regions(raw_regions, p["min_gap_sec"])
 

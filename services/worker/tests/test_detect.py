@@ -204,6 +204,18 @@ def test_detect_segments_clipped_loud_room_still_detects():
     assert 0.0 <= segments[0]["confidence"] <= 1.0
 
 
+def test_detect_segments_pure_silence_produces_no_segments():
+    silence = np.zeros(fixtures.SAMPLE_RATE * 60)
+    segments = detect.detect_segments(silence, fixtures.SAMPLE_RATE)
+    assert segments == []
+
+
+def test_detect_segments_audio_shorter_than_one_frame_produces_no_segments():
+    tiny = np.zeros(50)
+    segments = detect.detect_segments(tiny, fixtures.SAMPLE_RATE)
+    assert segments == []
+
+
 def test_detect_segments_every_segment_has_confidence_fields():
     audio = fixtures.concat(
         fixtures.noise(5.0, amplitude=0.01),
