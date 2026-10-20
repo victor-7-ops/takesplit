@@ -44,6 +44,9 @@ export default function Upload() {
         created_by: session.user.id,
       });
       if (insertError) {
+        // Clean up the just-uploaded file rather than leaving an orphaned storage
+        // object with nothing in the DB pointing at it.
+        await supabase.storage.from("rehearsals").remove([storagePath]);
         setError(insertError.message);
         return;
       }

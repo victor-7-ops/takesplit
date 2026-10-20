@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -65,25 +66,25 @@ def run_process(rehearsal_id: str) -> None:
                 )
 
         with _timed("write clips"):
-            client.table("clips").delete().eq("rehearsal_id", rehearsal_id).eq("auto_detected", True).execute()
-
             clip_confidence = {}
+            rpc_segments = []
             for seg in segments:
-                inserted = (
-                    client.table("clips")
-                    .insert(
-                        {
-                            "rehearsal_id": rehearsal_id,
-                            "start_sec": seg["start_sec"],
-                            "end_sec": seg["end_sec"],
-                            "kind": seg["kind"],
-                            "auto_detected": True,
-                        }
-                    )
-                    .execute()
-                    .data[0]
+                clip_id = str(uuid.uuid4())
+                rpc_segments.append(
+                    {
+                        "id": clip_id,
+                        "start_sec": seg["start_sec"],
+                        "end_sec": seg["end_sec"],
+                        "kind": seg["kind"],
+                    }
                 )
-                clip_confidence[str(inserted["id"])] = {"score": seg["confidence"], "tier": seg["confidence_tier"]}
+                clip_confidence[clip_id] = {"score": seg["confidence"], "tier": seg["confidence_tier"]}
+
+            # Delete-then-insert happens in one DB transaction (see migration 0008), so a
+            # client reading `clips` mid-reprocess never sees a partial list.
+            client.rpc(
+                "replace_auto_clips", {"p_rehearsal_id": rehearsal_id, "p_segments": rpc_segments}
+            ).execute()
 
         merged_params = {**detect.DEFAULT_PARAMS, **params, "clip_confidence": clip_confidence}
         client.table("rehearsals").update(
